@@ -1,0 +1,185 @@
+---
+title: "R shiny workshop - flexdashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+  runtime: shiny
+---
+
+```{r setup, include=FALSE}
+
+# Load the required libraries 
+library(bslib)
+library(data.table)
+library(DT)
+library(flexdashboard)
+library(ggplot2)
+library(haven)
+library(knitr)
+library(plotly)
+library(rmarkdown)
+library(shiny)
+library(shinydashboard)
+library(stringr)
+library(tidyverse)
+
+# Read the required data from the source
+adae <- read_xpt(url("https://github.com/cdisc-org/sdtm-adam-pilot-project/blob/master/updated-pilot-submission-package/900172/m5/datasets/cdiscpilot01/analysis/adam/datasets/adae.xpt?raw=true"))
+adsl <- read_xpt(url("https://github.com/cdisc-org/sdtm-adam-pilot-project/blob/master/updated-pilot-submission-package/900172/m5/datasets/cdiscpilot01/analysis/adam/datasets/adsl.xpt?raw=true"))
+advs <- read_xpt(url("https://github.com/cdisc-org/sdtm-adam-pilot-project/blob/master/updated-pilot-submission-package/900172/m5/datasets/cdiscpilot01/analysis/adam/datasets/advs.xpt?raw=true"))
+
+```
+
+Sidebar {.sidebar data-width=200}
+=======================================================================
+
+```{r}
+varSelectInput("popvar", "Choose population variable", adsl[1, ] %>% select(SAFFL, ITTFL, EFFFL, COMP8FL, COMP16FL, COMP24FL))
+
+varSelectInput("demovar", "Choose demographic variable", adsl[1, ] %>% select(AGEGR1, SEX, RACE, ETHNIC, BMIBLGR1))
+
+varSelectInput("basecharvar", "Choose baseline characteristic variable", 
+               adsl[1, ] %>% select(AGE, HEIGHTBL, WEIGHTBL, BMIBL, CUMDOSE, AVGDD, DURDIS))
+
+selectInput("trtemfl", "Treatment emergent event",  unique(adae$TRTEMFL), multiple=T, selected=sort(unique(adae$TRTEMFL)))
+
+selectInput("aeser", "Serious event",  unique(adae$AESER), multiple=T, selected=sort(unique(adae$AESER)))
+
+checkboxGroupInput("aerel", "Causality",  c("NONE", "POSSIBLE", "PROBABLE", "REMOTE"), selected=c("NONE", "POSSIBLE", "PROBABLE", "REMOTE"))
+
+selectInput("param", "Select param",  unique(advs$PARAM))
+
+# Reactive function - Subset ADSL
+subadsl <- reactive({
+  adsl %>%
+    filter(!!input$popvar == "Y")
+  })
+
+# Reactive function - Subset ADAE
+subadae <- reactive({
+  adae %>%
+    mutate(AEREL = ifelse(is.na(AEREL), "NONE", AEREL)) %>% 
+    filter(SAFFL == "Y" & AEREL != "" & 
+           TRTEMFL %in% c(input$trtemfl) & 
+           AESER %in% c(input$aeser) & 
+           AEREL %in% c(input$aerel))
+  })
+
+# Reactive function - Subset and create descriptive summary of ADVS
+dsumvs <- reactive({
+  advs %>%
+    filter(SAFFL == "Y" & ANL01FL == "Y" & PARAM == input$param) %>% 
+    mutate(VISIT = str_to_title(VISIT)) %>% 
+    group_by(PARAMCD, PARAM, VISITNUM, VISIT, TRTAN, TRTA) %>% 
+    summarise(N = n(),
+              MEAN = mean(AVAL, na.rm = T), 
+              MEDIAN = median(AVAL, na.rm = T),
+              SD = sd(AVAL, na.rm = T),
+              MIN = min(AVAL, na.rm = T),
+              MAX = max(AVAL, na.rm = T)
+              )
+  })
+```
+
+
+Demographics and baseline characteristics
+=======================================================================
+
+Column {data-width=800 .tabset}
+-----------------------------------------------------------------------
+
+### Demographics bar plot
+
+```{r}
+renderPlot({
+  subadsl() %>% 
+    ggplot(aes(x=!!input$demovar, fill=TRT01A)) + geom_bar()
+})
+```
+
+### Demographics data
+
+```{r}
+renderDT({
+  datatable(subadsl() %>% 
+              select(USUBJID, TRT01A, !!input$demovar, SAFFL, ITTFL, EFFFL, COMP8FL, COMP16FL, COMP24FL))
+})
+```
+
+### Baseline characteristics box plot
+
+```{r}
+renderPlot({
+  subadsl() %>% 
+    ggplot(aes(x=!!input$demovar, y=!!input$basecharvar, fill=TRT01A)) + geom_boxplot()
+})
+```
+
+### Baseline characteristics data
+
+```{r}
+renderDT({
+  datatable(subadsl() %>% 
+              select(USUBJID, TRT01A, !!input$demovar, !!input$basecharvar, SAFFL, ITTFL, EFFFL, COMP8FL, COMP16FL, COMP24FL))
+})
+```
+
+Adverse events bar plot {data-navmenu="Adverse events"}
+=======================================================================
+
+Column {data-width=800}
+-----------------------------------------------------------------------
+
+### Adverse events bar plot {.no-title}
+
+```{r}
+renderPlotly({
+  aep1 <- subadae() %>% 
+    ggplot(aes(y=AESOC)) + geom_bar()
+  
+  ggplotly(aep1)
+})
+```
+
+Adverse events data {data-navmenu="Adverse events"}
+=======================================================================
+
+Column {data-width=800}
+-----------------------------------------------------------------------
+
+### Adverse events data {.no-title}
+
+```{r}
+renderDT({
+  datatable(subadae())
+})
+```
+
+Vital signs
+=======================================================================
+
+Column {data-width=800}
+-----------------------------------------------------------------------
+
+### Error bar plot
+
+```{r}
+renderPlotly({
+  vsp1 <- dsumvs() %>% 
+    ggplot(aes(x=VISIT, y=MEAN, group=TRTA, color=TRTA)) + 
+          geom_line() +
+          geom_point()+
+          geom_crossbar(aes(ymin=MEAN-SD, ymax=MEAN+SD), width=.2, position=position_dodge(0.05))
+  
+  ggplotly(vsp1)
+})
+```
+
+### Descriptive summary
+
+```{r}
+renderDT({
+  datatable(dsumvs())
+})
+```
