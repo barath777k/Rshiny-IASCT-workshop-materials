@@ -1,0 +1,13 @@
+name: flexdashboard
+title: flexdashboard
+username: sipq
+account: sipq
+server: connect.bifrost-prd.corp.aws.novonordisk.com
+hostUrl: https://connect.bifrost-prd.corp.aws.novonordisk.com/__api__
+appId: 2312
+bundleId: 4561
+url: https://connect.bifrost-prd.corp.aws.novonordisk.com/content/98a1c73e-9f6f-4672-b6c6-5ec3ce68d34e/
+when: 1669645785.23528
+lastSyncTime: 1669645785.23529
+asMultiple: FALSE
+asStatic: FALSE
