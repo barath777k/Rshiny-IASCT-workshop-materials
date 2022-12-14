@@ -1,0 +1,33 @@
+pool:
+  name: DII
+
+variables:
+  imageName: 'R:$(Build.BuildId)'
+  AppName: '$(Build.Repository.Name)'
+
+steps:
+- script: |
+    shiny_root=$(find "$(cd ..; pwd)" -maxdepth 3 \( -name "app.*" -o -name "ui.*" \) -type f)
+    shiny_root=$(dirname $shiny_root)
+    echo '##vso[task.setvariable variable=shiny_workdir;]'$shiny_root
+
+    echo "$(shiny_workdir)"
+    echo "$shiny_workdir"
+
+  displayName: 'Setting up folder structure'
+
+- task: CopyFiles@2
+  displayName: 'Copy Files to: $(Build.ArtifactStagingDirectory)'
+  inputs:
+    SourceFolder: '$(Build.SourcesDirectory)'
+    Contents: |
+     **/*
+     !.git/**/*
+     !.gitignore
+     !README.*
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifact: $(Build.BuildId).tar.gz'
+  inputs:
+    ArtifactName: '$(Build.BuildId)_content'
